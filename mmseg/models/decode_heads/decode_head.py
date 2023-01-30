@@ -64,6 +64,8 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
                  dropout_ratio=0.1,
                  conv_cfg=None,
                  norm_cfg=None,
+                 out_channels=None,
+                 threshold= None,
                  act_cfg=dict(type='ReLU'),
                  in_index=-1,
                  input_transform=None,
@@ -88,6 +90,7 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
 
         self.ignore_index = ignore_index
         self.align_corners = align_corners
+        self.out_channels = out_channels
 
         if out_channels is None:
             if num_classes == 2:
@@ -110,7 +113,6 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
             warnings.warn('threshold is not defined for binary, and defaults'
                           'to 0.3')
         self.num_classes = num_classes
-        self.out_channels = out_channels
         self.threshold = threshold
 
         if isinstance(loss_decode, dict):
