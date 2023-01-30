@@ -7,7 +7,8 @@ from mmcv.utils import deprecated_api_warning, is_tuple_of
 from numpy import random
 
 from ..builder import PIPELINES
-
+from albumentations.augmentations.transforms import GaussNoise as AlbuGaussNoise
+from albumentations import Compose
 
 @PIPELINES.register_module()
 class ResizeToMultiple(object):
@@ -974,6 +975,66 @@ class PhotoMetricDistortion(object):
                      f'{self.saturation_upper}), '
                      f'hue_delta={self.hue_delta})')
         return repr_str
+
+
+@PIPELINES.register_module()
+class GaussNoise(object):
+    """Apply photometric distortion to image sequentially, every transformation
+    is applied with a probability of 0.5. The position of random contrast is in
+    second or second to last.
+
+    1. random brightness
+    2. random contrast (mode 0)
+    3. convert color from BGR to HSV
+    4. random saturation
+    5. random hue
+    6. convert color from HSV to BGR
+    7. random contrast (mode 1)
+
+    Args:
+        brightness_delta (int): delta of brightness.
+        contrast_range (tuple): range of contrast.
+        saturation_range (tuple): range of saturation.
+        hue_delta (int): delta of hue.
+    """
+
+    def __init__(self,
+                 noise_range=(0.5, 1.5)):
+        self.noise_lower, self.noise_upper = noise_range
+
+    def __call__(self, results):
+        """Call function to perform photometric distortion on images.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Result dict with images distorted.
+        """
+
+        img = results['img']
+        aug_pipeline = Compose([
+        #     A.RandomResizedCrop(256, 256, ratio=(0.25, 2.0), p=1.0)
+        #     RandomGridShuffle
+            AlbuGaussNoise(var_limit=(0.01, 0.1), p=0.5)
+        ], p=1)
+        augmented = aug_pipeline(image=np.float32(img)/255)
+
+        img = np.uint8(augmented['image']*255)
+
+        results['img'] = img
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += (f'(brightness_delta={self.brightness_delta}, '
+                     f'contrast_range=({self.contrast_lower}, '
+                     f'{self.contrast_upper}), '
+                     f'saturation_range=({self.saturation_lower}, '
+                     f'{self.saturation_upper}), '
+                     f'hue_delta={self.hue_delta})')
+        return repr_str
+
 
 
 @PIPELINES.register_module()

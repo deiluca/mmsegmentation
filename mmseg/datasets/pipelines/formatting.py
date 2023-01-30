@@ -7,7 +7,8 @@ import torch
 from mmcv.parallel import DataContainer as DC
 
 from ..builder import PIPELINES
-
+from PIL import Image
+import os
 
 def to_tensor(data):
     """Convert objects of various python types to :obj:`torch.Tensor`.
@@ -258,7 +259,8 @@ class Collect(object):
                  keys,
                  meta_keys=('filename', 'ori_filename', 'ori_shape',
                             'img_shape', 'pad_shape', 'scale_factor', 'flip',
-                            'flip_direction', 'img_norm_cfg')):
+                            'flip_direction', 'img_norm_cfg'),
+                 dump_dir = ""):
         self.keys = keys
         self.meta_keys = meta_keys
 
@@ -282,8 +284,22 @@ class Collect(object):
         data['img_metas'] = DC(img_meta, cpu_only=True)
         for key in self.keys:
             data[key] = results[key]
+        # if 'gt_semantic_seg' in self.keys:
+        #     self.dump_data(data)
         return data
 
+    def dump_data(self, data):
+        outdir = self.dumpdir
+        filedir = os.path.dirname(data['img_metas']._data['filename']).split('/')[-1]
+        filename = os.path.basename(data['img_metas']._data['filename']).replace('.tif', '')
+        filename = "_".join([filedir, filename])
+        img = data['img']._data[0, :, :]
+        mask = data['gt_semantic_seg']._data[0, :, :]
+        img = Image.fromarray(img.numpy().astype('uint8'), 'L')
+        mask = Image.fromarray((mask.numpy()*255).astype('uint8'), 'L')
+        img.save(os.path.join(outdir, f'{filename}.png'))
+        mask.save(os.path.join(outdir, f'{filename}_mask.png'))
+        
     def __repr__(self):
         return self.__class__.__name__ + \
                f'(keys={self.keys}, meta_keys={self.meta_keys})'

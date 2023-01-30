@@ -73,7 +73,7 @@ def main():
         if 'checkpoint' in args and osp.exists(args.checkpoint):
             load_checkpoint(model, args.checkpoint, map_location='cpu')
 
-        model = MMDataParallel(model, device_ids=[0])
+        model = MMDataParallel(model, device_ids=[0], dump_patches=True)
 
         model.eval()
 

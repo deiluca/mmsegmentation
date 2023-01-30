@@ -135,13 +135,17 @@ class BaseSegmentor(BaseModule, metaclass=ABCMeta):
                 DDP, it means the batch size on each GPU), which is used for
                 averaging the logs.
         """
-        losses = self(**data_batch)
+        losses, pred = self(**data_batch)
+        # with torch.no_grad():
+        #     data_batch["img"] = data_batch["img"].tolist()
+        #     result_orig = self(return_loss=False, **data_batch)
         loss, log_vars = self._parse_losses(losses)
 
         outputs = dict(
             loss=loss,
             log_vars=log_vars,
-            num_samples=len(data_batch['img_metas']))
+            num_samples=len(data_batch['img_metas']),
+            pred=pred)
 
         return outputs
 
@@ -152,7 +156,7 @@ class BaseSegmentor(BaseModule, metaclass=ABCMeta):
         during val epochs. Note that the evaluation after training epochs is
         not implemented with this method, but an evaluation hook.
         """
-        losses = self(**data_batch)
+        losses, pred = self(**data_batch)
         loss, log_vars = self._parse_losses(losses)
 
         log_vars_ = dict()
@@ -248,6 +252,7 @@ class BaseSegmentor(BaseModule, metaclass=ABCMeta):
         img = mmcv.imread(img)
         img = img.copy()
         seg = result[0]
+        # TODO: dump prediction to file (Luca)
         if palette is None:
             if self.PALETTE is None:
                 # Get random state before set seed,

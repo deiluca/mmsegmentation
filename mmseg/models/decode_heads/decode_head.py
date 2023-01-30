@@ -1,5 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import warnings
+
 from abc import ABCMeta, abstractmethod
 
 import torch
@@ -60,8 +61,6 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
                  channels,
                  *,
                  num_classes,
-                 out_channels=None,
-                 threshold=None,
                  dropout_ratio=0.1,
                  conv_cfg=None,
                  norm_cfg=None,
@@ -80,6 +79,7 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
         super(BaseDecodeHead, self).__init__(init_cfg)
         self._init_inputs(in_channels, in_index, input_transform)
         self.channels = channels
+        self.num_classes = num_classes
         self.dropout_ratio = dropout_ratio
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
@@ -128,7 +128,7 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
         else:
             self.sampler = None
 
-        self.conv_seg = nn.Conv2d(channels, self.out_channels, kernel_size=1)
+        self.conv_seg = nn.Conv2d(channels, num_classes, kernel_size=1)
         if dropout_ratio > 0:
             self.dropout = nn.Dropout2d(dropout_ratio)
         else:
@@ -229,9 +229,9 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        seg_logits = self(inputs)
+        seg_logits = self.forward(inputs)
         losses = self.losses(seg_logits, gt_semantic_seg)
-        return losses
+        return losses, seg_logits
 
     def forward_test(self, inputs, img_metas, test_cfg):
         """Forward function for testing.

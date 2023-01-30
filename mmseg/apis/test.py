@@ -77,6 +77,7 @@ def single_gpu_test(model,
 
     model.eval()
     results = []
+    results_for_saving_imgs = []
     dataset = data_loader.dataset
     prog_bar = mmcv.ProgressBar(len(dataset))
     # The pipeline about how the data_loader retrieval samples from dataset:
@@ -85,10 +86,10 @@ def single_gpu_test(model,
     # data_fetcher -> collate_fn(dataset[index]) -> data_sample
     # we use batch_sampler to get correct data idx
     loader_indices = data_loader.batch_sampler
-
+    i= 0
     for batch_indices, data in zip(loader_indices, data_loader):
         with torch.no_grad():
-            result = model(return_loss=False, **data)
+            result_orig = model(return_loss=False, **data)
 
         if show or out_dir:
             img_tensor = data['img'][0]
@@ -96,36 +97,46 @@ def single_gpu_test(model,
             imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
             assert len(imgs) == len(img_metas)
 
-            for img, img_meta in zip(imgs, img_metas):
-                h, w, _ = img_meta['img_shape']
-                img_show = img[:h, :w, :]
+            # for img, img_meta in zip(imgs, img_metas):
+            #     if len(img_meta['img_shape'])==3:
+            #         h, w, _ = img_meta['img_shape']
+            #         img_show = img[:h, :w, :]
+            #         ori_h, ori_w = img_meta['ori_shape'][:-1]
 
-                ori_h, ori_w = img_meta['ori_shape'][:-1]
-                img_show = mmcv.imresize(img_show, (ori_w, ori_h))
+            #     elif len(img_meta['img_shape'])==2:
+            #         h, w = img_meta['img_shape']
+            #         img_show = img[:h, :w]
+            #         ori_h, ori_w = img_meta['ori_shape']
+            #     else:
+            #         raise NotImplementedError
 
-                if out_dir:
-                    out_file = osp.join(out_dir, img_meta['ori_filename'])
-                else:
-                    out_file = None
+            #     img_show = mmcv.imresize(img_show, (ori_w, ori_h))
 
-                model.module.show_result(
-                    img_show,
-                    result,
-                    palette=dataset.PALETTE,
-                    show=show,
-                    out_file=out_file,
-                    opacity=opacity)
+            #     if out_dir:
+            #         out_file = osp.join(out_dir, img_meta['ori_filename'])
+            #     else:
+            #         out_file = None
+
+            #     model.module.show_result(
+            #         img_show,
+            #         result,
+            #         palette=dataset.PALETTE,
+            #         show=show,
+            #         out_file=out_file,
+            #         opacity=opacity)
+            i+=1
 
         if efficient_test:
             result = [np2tmp(_, tmpdir='.efficient_test') for _ in result]
-
         if format_only:
             result = dataset.format_results(
                 result, indices=batch_indices, **format_args)
         if pre_eval:
             # TODO: adapt samples_per_gpu > 1.
             # only samples_per_gpu=1 valid now
-            result = dataset.pre_eval(result, indices=batch_indices)
+            results_for_saving_imgs.extend(result_orig)
+
+            result = dataset.pre_eval(result_orig, indices=batch_indices)
             results.extend(result)
         else:
             results.extend(result)
@@ -134,7 +145,7 @@ def single_gpu_test(model,
         for _ in range(batch_size):
             prog_bar.update()
 
-    return results
+    return results, results_for_saving_imgs
 
 
 def multi_gpu_test(model,

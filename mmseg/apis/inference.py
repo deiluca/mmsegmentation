@@ -60,14 +60,16 @@ class LoadImage:
         else:
             results['filename'] = None
             results['ori_filename'] = None
-        img = mmcv.imread(results['img'])
+        img = mmcv.imread(results['img']) #orig image
+        # img = mmcv.imread(results['img'])[:,:,0] # luca for taking only channel 0
         results['img'] = img
         results['img_shape'] = img.shape
         results['ori_shape'] = img.shape
+        # print("img.shape", img.shape)
         return results
 
 
-def inference_segmentor(model, imgs):
+def inference_segmentor(model, img):
     """Inference image(s) with the segmentor.
 
     Args:
@@ -84,13 +86,9 @@ def inference_segmentor(model, imgs):
     test_pipeline = [LoadImage()] + cfg.data.test.pipeline[1:]
     test_pipeline = Compose(test_pipeline)
     # prepare data
-    data = []
-    imgs = imgs if isinstance(imgs, list) else [imgs]
-    for img in imgs:
-        img_data = dict(img=img)
-        img_data = test_pipeline(img_data)
-        data.append(img_data)
-    data = collate(data, samples_per_gpu=len(imgs))
+    data = dict(img=img)
+    data = test_pipeline(data)
+    data = collate([data], samples_per_gpu=1)
     if next(model.parameters()).is_cuda:
         # scatter to specified GPU
         data = scatter(data, [device])[0]
@@ -98,11 +96,35 @@ def inference_segmentor(model, imgs):
         data['img_metas'] = [i.data[0] for i in data['img_metas']]
 
     # forward the model
+    print(model)
+    print('Normal forward pass')
     with torch.no_grad():
         result = model(return_loss=False, rescale=True, **data)
-    return result
+    # print('Extracting encoder features')
+    # encoder_features = model.extract_feat(data['img'][0])
+    print('Extracting encoder features + attn weights')
+    encoder_features, attn_weights = model.backbone.forward_incl_get_attn_weights(data['img'][0]) # encoder_features, attn_weights
 
+    return result, encoder_features, attn_weights
 
+def get_data(model, img):
+    cfg = model.cfg
+    device = next(model.parameters()).device  # model device
+    # build the data pipeline
+    test_pipeline = [LoadImage()] + cfg.data.test.pipeline[1:] # orig
+    # test_pipeline = [LoadImage()] + cfg.data.test.pipeline # luca
+    test_pipeline = Compose(test_pipeline)
+    # print(test_pipeline)
+    # prepare data
+    data = dict(img=img)
+    data = test_pipeline(data)
+    data = collate([data], samples_per_gpu=1)
+    if next(model.parameters()).is_cuda:
+        # scatter to specified GPU
+        data = scatter(data, [device])[0]
+    else:
+        data['img_metas'] = [i.data[0] for i in data['img_metas']]
+    return data
 def show_result_pyplot(model,
                        img,
                        result,

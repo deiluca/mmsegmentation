@@ -185,6 +185,38 @@ class EfficientMultiheadAttention(MultiheadAttention):
 
         return identity + self.dropout_layer(self.proj_drop(out))
 
+    def forward_incl_get_attn_weights(self, x, hw_shape, identity=None):    
+        x_q = x
+        if self.sr_ratio > 1:
+            x_kv = nlc_to_nchw(x, hw_shape)
+            x_kv = self.sr(x_kv)
+            x_kv = nchw_to_nlc(x_kv)
+            x_kv = self.norm(x_kv)
+        else:
+            x_kv = x
+
+        if identity is None:
+            identity = x_q
+
+        # Because the dataflow('key', 'query', 'value') of
+        # ``torch.nn.MultiheadAttention`` is (num_query, batch,
+        # embed_dims), We should adjust the shape of dataflow from
+        # batch_first (batch, num_query, embed_dims) to num_query_first
+        # (num_query ,batch, embed_dims), and recover ``attn_output``
+        # from num_query_first to batch_first.
+        if self.batch_first:
+            x_q = x_q.transpose(0, 1)
+            x_kv = x_kv.transpose(0, 1)
+
+        # out = self.attn(query=x_q, key=x_kv, value=x_kv)[0] # orig
+        # out, attn_weights = self.attn(query=x_q, key=x_kv, value=x_kv) # should also output attention weights
+        out, attn_weights = self.attn(query=x_q, key=x_kv, value=x_kv, average_attn_weights=False) # should also output attention weights
+
+        if self.batch_first:
+            out = out.transpose(0, 1)
+
+        return identity + self.dropout_layer(self.proj_drop(out)), attn_weights
+
     def legacy_forward(self, x, hw_shape, identity=None):
         """multi head attention forward in mmcv version < 1.3.17."""
 
@@ -293,7 +325,19 @@ class TransformerEncoderLayer(BaseModule):
         else:
             x = _inner_forward(x)
         return x
+    
+    def forward_getattn_weights(self, x, hw_shape):
+    
+        def _inner_forward(x):
+            x, attn_weights = self.attn.forward_incl_get_attn_weights(self.norm1(x), hw_shape, identity=x)
+            x = self.ffn(self.norm2(x), hw_shape, identity=x)
+            return x, attn_weights
 
+        if self.with_cp and x.requires_grad:
+            x = cp.checkpoint(_inner_forward, x)
+        else:
+            x, attn_weights = _inner_forward(x)
+        return x, attn_weights
 
 @BACKBONES.register_module()
 class MixVisionTransformer(BaseModule):
@@ -372,6 +416,7 @@ class MixVisionTransformer(BaseModule):
         self.num_stages = num_stages
         self.num_layers = num_layers
         self.num_heads = num_heads
+        self.dropouts = [drop_rate, attn_drop_rate, drop_path_rate] # luca
         self.patch_sizes = patch_sizes
         self.strides = strides
         self.sr_ratios = sr_ratios
@@ -436,15 +481,34 @@ class MixVisionTransformer(BaseModule):
             super(MixVisionTransformer, self).init_weights()
 
     def forward(self, x):
+        print(self.dropouts)
         outs = []
 
         for i, layer in enumerate(self.layers):
-            x, hw_shape = layer[0](x)
-            for block in layer[1]:
+            x, hw_shape = layer[0](x) # 0 is PatchEmbedding. x before: x after: 12,288 x 32 (all 4x4 patches)
+            for block in layer[1]: # transformer encoder layer incl EffMultiHeadAttention and MixFFN
                 x = block(x, hw_shape)
-            x = layer[2](x)
+            x = layer[2](x) # this should be norm layer
             x = nlc_to_nchw(x, hw_shape)
             if i in self.out_indices:
                 outs.append(x)
-
+        # print('In MixVisionTransformer, outs.shape:', outs.shape)
         return outs
+
+    def forward_incl_get_attn_weights(self, x):
+        all_attn_weights = []
+        outs = []
+        for i, layer in enumerate(self.layers):
+            x, hw_shape = layer[0](x) # 0 is PatchEmbedding. x before: x after: 12,288 x 32 (all 4x4 patches)
+            for block in layer[1]: # transformer encoder layer incl EffMultiHeadAttention and MixFFN
+                x, attn_weights = block.forward_getattn_weights(x, hw_shape)
+                
+                # create attention maps for each head individually
+                for k in range(attn_weights.size(dim=1)):
+                    all_attn_weights.append(nlc_to_nchw(attn_weights[:, k, :, :], hw_shape))
+            x = layer[2](x) # this should be norm layer
+            x = nlc_to_nchw(x, hw_shape)
+            if i in self.out_indices:
+                outs.append(x)
+        # print('In MixVisionTransformer, outs.shape:', outs.shape)
+        return outs, all_attn_weights

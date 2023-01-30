@@ -228,6 +228,8 @@ def main():
     model.CLASSES = datasets[0].CLASSES
     # passing checkpoint meta for saving best checkpoint
     meta.update(cfg.checkpoint_config.meta)
+    pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print("total number of trainable parameters:", pytorch_total_params)
     train_segmentor(
         model,
         datasets,

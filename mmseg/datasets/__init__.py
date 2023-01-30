@@ -9,10 +9,10 @@ from .dark_zurich import DarkZurichDataset
 from .dataset_wrappers import (ConcatDataset, MultiImageMixDataset,
                                RepeatDataset)
 from .drive import DRIVEDataset
-from .face import FaceOccludedDataset
 from .hrf import HRFDataset
-from .imagenets import (ImageNetSDataset, LoadImageNetSAnnotations,
-                        LoadImageNetSImageFromFile)
+from .immunof import IFDataset
+from .immunof_3class_uncertainty import IFDataset3Class
+from .MS2D import MS2D
 from .isaid import iSAIDDataset
 from .isprs import ISPRSDataset
 from .loveda import LoveDADataset
@@ -25,11 +25,9 @@ from .voc import PascalVOCDataset
 __all__ = [
     'CustomDataset', 'build_dataloader', 'ConcatDataset', 'RepeatDataset',
     'DATASETS', 'build_dataset', 'PIPELINES', 'CityscapesDataset',
-    'PascalVOCDataset', 'ADE20KDataset', 'PascalContextDataset',
+    'PascalVOCDataset', 'ADE20KDataset', 'IFDataset', 'IFDataset3Class', 'PascalContextDataset',
     'PascalContextDataset59', 'ChaseDB1Dataset', 'DRIVEDataset', 'HRFDataset',
     'STAREDataset', 'DarkZurichDataset', 'NightDrivingDataset',
     'COCOStuffDataset', 'LoveDADataset', 'MultiImageMixDataset',
-    'iSAIDDataset', 'ISPRSDataset', 'PotsdamDataset', 'FaceOccludedDataset',
-    'ImageNetSDataset', 'LoadImageNetSAnnotations',
-    'LoadImageNetSImageFromFile'
+    'iSAIDDataset', 'ISPRSDataset', 'PotsdamDataset', 'MS2D'
 ]

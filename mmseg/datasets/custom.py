@@ -66,8 +66,8 @@ class CustomDataset(Dataset):
             The palette of segmentation map. If None is given, and
             self.PALETTE is None, random palette will be generated.
             Default: None
-        gt_seg_map_loader_cfg (dict): build LoadAnnotations to load gt for
-            evaluation, load from disk by default. Default: ``dict()``.
+        gt_seg_map_loader_cfg (dict, optional): build LoadAnnotations to
+            load gt for evaluation, load from disk by default. Default: None.
         file_client_args (dict): Arguments to instantiate a FileClient.
             See :class:`mmcv.fileio.FileClient` for details.
             Defaults to ``dict(backend='disk')``.
@@ -90,7 +90,7 @@ class CustomDataset(Dataset):
                  reduce_zero_label=False,
                  classes=None,
                  palette=None,
-                 gt_seg_map_loader_cfg=dict(),
+                 gt_seg_map_loader_cfg=None,
                  file_client_args=dict(backend='disk')):
         self.pipeline = Compose(pipeline)
         self.img_dir = img_dir
@@ -106,7 +106,8 @@ class CustomDataset(Dataset):
         self.CLASSES, self.PALETTE = self.get_classes_and_palette(
             classes, palette)
         self.gt_seg_map_loader = LoadAnnotations(
-            reduce_zero_label=reduce_zero_label, **gt_seg_map_loader_cfg)
+        ) if gt_seg_map_loader_cfg is None else LoadAnnotations(
+            **gt_seg_map_loader_cfg)
 
         self.file_client_args = file_client_args
         self.file_client = mmcv.FileClient.infer_client(self.file_client_args)
@@ -170,7 +171,7 @@ class CustomDataset(Dataset):
                 img_info = dict(filename=img)
                 if ann_dir is not None:
                     seg_map = img.replace(img_suffix, seg_map_suffix)
-                    img_info['ann'] = dict(seg_map=seg_map)
+                    img_info['ann'] = dict(seg_map=seg_map) 
                 img_infos.append(img_info)
             img_infos = sorted(img_infos, key=lambda x: x['filename'])
 
@@ -302,16 +303,13 @@ class CustomDataset(Dataset):
                     seg_map,
                     len(self.CLASSES),
                     self.ignore_index,
-                    # as the label map has already been applied and zero label
-                    # has already been reduced by get_gt_seg_map_by_idx() i.e.
-                    # LoadAnnotations.__call__(), these operations should not
-                    # be duplicated. See the following issues/PRs:
+                    # as the labels has been converted when dataset initialized
+                    # in `get_palette_for_custom_classes ` this `label_map`
+                    # should be `dict()`, see
                     # https://github.com/open-mmlab/mmsegmentation/issues/1415
-                    # https://github.com/open-mmlab/mmsegmentation/pull/1417
-                    # https://github.com/open-mmlab/mmsegmentation/pull/2504
-                    # for more details
+                    # for more ditails
                     label_map=dict(),
-                    reduce_zero_label=False))
+                    reduce_zero_label=self.reduce_zero_label))
 
         return pre_eval_results
 
@@ -351,7 +349,7 @@ class CustomDataset(Dataset):
             self.label_map = {}
             for i, c in enumerate(self.CLASSES):
                 if c not in class_names:
-                    self.label_map[i] = 255
+                    self.label_map[i] = -1
                 else:
                     self.label_map[i] = class_names.index(c)
 
@@ -366,7 +364,7 @@ class CustomDataset(Dataset):
             palette = []
             for old_id, new_id in sorted(
                     self.label_map.items(), key=lambda x: x[1]):
-                if new_id != 255:
+                if new_id != -1:
                     palette.append(self.PALETTE[old_id])
             palette = type(self.PALETTE)(palette)
 
@@ -386,6 +384,9 @@ class CustomDataset(Dataset):
                 palette = self.PALETTE
 
         return palette
+
+    def return_pre_eval_metrics(self, results, metric):
+        return pre_eval_to_metrics(results, metric)
 
     def evaluate(self,
                  results,
@@ -429,7 +430,7 @@ class CustomDataset(Dataset):
                 self.ignore_index,
                 metric,
                 label_map=dict(),
-                reduce_zero_label=False)
+                reduce_zero_label=self.reduce_zero_label)
         # test a list of pre_eval_results
         else:
             ret_metrics = pre_eval_to_metrics(results, metric)

@@ -17,10 +17,13 @@ def dice_loss(pred,
               exponent=2,
               class_weight=None,
               ignore_index=255):
+    print(f"Dice loss ignoring index {ignore_index}")
     assert pred.shape[0] == target.shape[0]
     total_loss = 0
     num_classes = pred.shape[1]
     for i in range(num_classes):
+        # only additionally ignored here: that means it would not even be necessary to set the class weight of the ignored class to 0
+        # main ignoration takes place below in line 115
         if i != ignore_index:
             dice_loss = binary_dice_loss(
                 pred[:, i],
@@ -108,6 +111,7 @@ class DiceLoss(nn.Module):
         one_hot_target = F.one_hot(
             torch.clamp(target.long(), 0, num_classes - 1),
             num_classes=num_classes)
+        # here are the indices ignored!!!
         valid_mask = (target != self.ignore_index).long()
 
         loss = self.loss_weight * dice_loss(
