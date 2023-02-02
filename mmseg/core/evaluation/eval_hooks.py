@@ -88,9 +88,8 @@ class EvalHook(_EvalHook):
                 'best_score', self.init_value_map[self.rule])
             if self.compare_func(key_score, best_score):
                 best_score = key_score
-                runner.meta['hook_msgs']['best_score'] = best_score
                 self.dataloader.dataset.format_results(results_for_saving_imgs, file_info=metrics, imgfile_prefix=self.outdir)
-                # self._save_ckpt(runner, key_score)
+                self._save_ckpt(runner, key_score)
                 # save empty file with mean dice score for class 1
                 mean_dice_class_1 = sum(metrics)/len(metrics)
                 file = self.outdir+f'/mean_dice_score_cls1_at_lowest_mean_dice_allclasses_{mean_dice_class_1:.2f}.txt'
