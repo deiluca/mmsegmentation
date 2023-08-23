@@ -25,7 +25,8 @@ class IFDataset(CustomDataset):
     def __init__(self, **kwargs):
         super(IFDataset, self).__init__(
             img_suffix='.tif',
-            seg_map_suffix='.png',
+            # seg_map_suffix='.png', # before 20/07/23
+            seg_map_suffix='.tif',# at 20/07/23
             reduce_zero_label=False,
             **kwargs)
 
@@ -74,8 +75,8 @@ class IFDataset(CustomDataset):
 
     def clear_outdir(self, outdir):
         for f in os.listdir(outdir):
-            assert f.endswith(self.seg_map_suffix) or f.endswith(".txt")
-            os.remove(os.path.join(outdir, f))
+            if f.endswith(self.seg_map_suffix) or f.endswith(".txt") or f.endswith(".png"):
+                os.remove(os.path.join(outdir, f))
 
     def format_results(self,
                        results,

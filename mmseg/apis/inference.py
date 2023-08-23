@@ -7,7 +7,7 @@ from mmcv.runner import load_checkpoint
 
 from mmseg.datasets.pipelines import Compose
 from mmseg.models import build_segmentor
-
+import numpy as np
 
 def init_segmentor(config, checkpoint=None, device='cuda:0'):
     """Initialize a segmentor from config file.
@@ -65,7 +65,37 @@ class LoadImage:
         results['img'] = img
         results['img_shape'] = img.shape
         results['ori_shape'] = img.shape
-        # print("img.shape", img.shape)
+        print("img.shape", img.shape)
+        return results
+
+class LoadImageGrayscale:
+    """A simple pipeline to load image."""
+
+    def __call__(self, results):
+        """Call function to load images into results.
+
+        Args:
+            results (dict): A result dict contains the file name
+                of the image to be read.
+
+        Returns:
+            dict: ``results`` will be returned containing loaded image.
+        """
+
+        if isinstance(results['img'], str):
+            results['filename'] = results['img']
+            results['ori_filename'] = results['img']
+        else:
+            results['filename'] = None
+            results['ori_filename'] = None
+        img = mmcv.imread(results['img']) #orig image
+        img = np.dot(img[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
+
+        # img = mmcv.imread(results['img'])[:,:,0] # luca for taking only channel 0
+        results['img'] = img
+        results['img_shape'] = img.shape
+        results['ori_shape'] = img.shape
+        print("img.shape", img.shape)
         return results
 
 
@@ -83,7 +113,8 @@ def inference_segmentor(model, img):
     cfg = model.cfg
     device = next(model.parameters()).device  # model device
     # build the data pipeline
-    test_pipeline = [LoadImage()] + cfg.data.test.pipeline[1:]
+    # test_pipeline = [LoadImage()] + cfg.data.test.pipeline[1:] # version before 28/06/23
+    test_pipeline = [LoadImageGrayscale()] + cfg.test_pipeline[1:] # version at 28/06/23 but only for IF images
     test_pipeline = Compose(test_pipeline)
     # prepare data
     data = dict(img=img)
